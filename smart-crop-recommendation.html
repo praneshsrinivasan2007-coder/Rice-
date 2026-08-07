@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mannvasam · AI Smart Crop Advisor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+Tamil:wght@400;500;600;700;800&family=Noto+Serif+Tamil:wght@600;700&display=swap" rel="stylesheet">
+
+<!-- Firebase (optional cloud sync). App auto-falls-back to local storage if FIREBASE_CONFIG is left as placeholder. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+/* ============ TOKENS ============ */
+:root{
+  --soil-dark:#2A1D13;
+  --soil-mid:#5C4432;
+  --soil-line:#A98B63;
+  --leaf:#3E7D4E;
+  --leaf-dark:#2C5B39;
+  --leaf-light:#8FBF4E;
+  --gold:#E3A53E;
+  --gold-dark:#B87F22;
+  --water:#3E7FA3;
+  --water-dark:#2A5E7C;
+  --paper:#F8F4E8;
+  --paper-2:#EFE7D3;
+  --card:#FFFFFF;
+  --ink:#241A12;
+  --ink-soft:#5B4B3B;
+  --danger:#B4442E;
+  --radius:14px;
+  --shadow:0 6px 24px rgba(42,29,19,.08);
+  --shadow-lg:0 16px 44px rgba(42,29,19,.16);
+  --font-display:'Fraunces',serif;
+  --font-display-ta:'Noto Serif Tamil',serif;
+  --font-body:'Inter',sans-serif;
+  --font-body-ta:'Noto Sans Tamil',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--font-body);
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+body.lang-ta, body.lang-ta input, body.lang-ta select, body.lang-ta button{
+  font-family:var(--font-body-ta);
+}
+h1,h2,h3,.display{font-family:var(--font-display);font-weight:600;letter-spacing:-.01em;}
+body.lang-ta h1,body.lang-ta h2,body.lang-ta h3,body.lang-ta .display{font-family:var(--font-display-ta);}
+button{font-family:inherit;cursor:pointer;}
+a{color:inherit;}
+::selection{background:var(--leaf-light);color:var(--soil-dark);}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px;}
+
+/* ============ SOIL HORIZON MOTIF ============ */
+.horizon-rule{
+  height:10px;width:100%;
+  background:repeating-linear-gradient(90deg,var(--leaf) 0 26px, var(--leaf-light) 26px 30px, var(--gold) 30px 34px, transparent 34px 40px);
+  opacity:.9;
+}
+.horizon-strip{display:flex;height:6px;width:100%;overflow:hidden;border-radius:6px;}
+.horizon-strip span{flex:1;}
+.horizon-strip .o{background:var(--leaf-light);}
+.horizon-strip .a{background:var(--leaf);}
+.horizon-strip .b{background:var(--soil-mid);}
+.horizon-strip .c{background:var(--soil-dark);}
+
+.sprout{display:inline-block;transform-origin:bottom center;}
+
+/* ============ LAYOUT ============ */
+#app{min-height:100vh;display:none;}
+#app.active{display:flex;}
+.hidden{display:none !important;}
+
+/* ---- Auth screen ---- */
+#auth{min-height:100vh;display:flex;}
+.auth-hero{
+  flex:1.1;background:linear-gradient(165deg,var(--soil-dark) 0%,var(--leaf-dark) 78%);
+  color:#F3ECDB;padding:56px 48px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;
+}
+.auth-hero::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:64px;
+  background:repeating-linear-gradient(90deg,rgba(227,165,62,.35) 0 22px, transparent 22px 44px);
+}
+.brand{display:flex;align-items:center;gap:12px;font-family:var(--font-display);font-size:22px;font-weight:700;}
+.brand .mark{width:38px;height:38px;border-radius:10px;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:20px;}
+.auth-hero h1{font-size:44px;line-height:1.08;margin:40px 0 14px;max-width:480px;}
+.auth-hero p{font-size:16px;line-height:1.6;color:#E7DEC7;max-width:420px;}
+.hero-stats{display:flex;gap:28px;margin-top:38px;flex-wrap:wrap;}
+.hero-stats div{border-left:2px solid rgba(255,255,255,.25);padding-left:12px;}
+.hero-stats b{display:block;font-family:var(--font-mono);font-size:22px;color:var(--gold);}
+.hero-stats span{font-size:12.5px;color:#D8CDAF;}
+
+.auth-panel{flex:1;display:flex;align-items:center;justify-content:center;padding:32px;}
+.auth-box{width:100%;max-width:390px;}
+.auth-tabs{display:flex;gap:6px;background:var(--paper-2);padding:5px;border-radius:12px;margin-bottom:26px;}
+.auth-tabs button{flex:1;border:none;background:transparent;padding:10px;border-radius:9px;font-weight:600;font-size:14px;color:var(--ink-soft);}
+.auth-tabs button.active{background:var(--card);color:var(--leaf-dark);box-shadow:var(--shadow);}
+.field{margin-bottom:16px;}
+.field label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;}
+.field input,.field select{
+  width:100%;padding:12px 14px;border-radius:10px;border:1.5px solid #E3D9C0;background:#fff;
+  font-size:15px;color:var(--ink);transition:border-color .15s;
+}
+.field input:focus,.field select:focus{border-color:var(--leaf);outline:none;}
+.btn{
+  width:100%;padding:13px;border-radius:10px;border:none;background:var(--leaf);color:#fff;
+  font-weight:700;font-size:15px;letter-spacing:.01em;transition:transform .12s, background .15s;
+}
+.btn:hover{background:var(--leaf-dark);}
+.btn:active{transform:scale(.98);}
+.btn-gold{background:var(--gold);color:var(--soil-dark);}
+.btn-gold:hover{background:var(--gold-dark);color:#fff;}
+.btn-outline{background:transparent;border:1.5px solid var(--soil-mid);color:var(--soil-mid);}
+.auth-note{font-size:12.5px;color:var(--ink-soft);margin-top:14px;text-align:center;line-height:1.5;}
+.auth-error{background:#FBE7E2;color:var(--danger);padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:14px;display:none;}
+.lang-toggle{display:flex;gap:0;border:1.5px solid rgba(255,255,255,.4);border-radius:9px;overflow:hidden;width:fit-content;}
+.lang-toggle button{background:transparent;border:none;color:#EFE7D3;padding:7px 14px;font-size:12.5px;font-weight:700;}
+.lang-toggle button.active{background:var(--gold);color:var(--soil-dark);}
+
+/* ---- App shell ---- */
+#app{width:100%;}
+.sidebar{
+  width:230px;flex-shrink:0;background:var(--soil-dark);color:#EFE7D3;
+  display:flex;flex-direction:column;padding:24px 16px;position:sticky;top:0;height:100vh;
+}
+.sidebar .brand{color:#fff;font-size:18px;margin-bottom:30px;padding:0 6px;}
+.nav-item{
+  display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:10px;color:#D8CDAF;
+  font-weight:600;font-size:14.5px;margin-bottom:4px;border:none;background:transparent;width:100%;text-align:left;
+}
+.nav-item .ic{width:20px;text-align:center;}
+.nav-item:hover{background:rgba(255,255,255,.06);color:#fff;}
+.nav-item.active{background:var(--leaf);color:#fff;}
+.sidebar-footer{margin-top:auto;border-top:1px solid rgba(255,255,255,.12);padding-top:14px;}
+.user-chip{display:flex;align-items:center;gap:10px;font-size:13px;color:#D8CDAF;padding:0 6px 10px;}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--gold);color:var(--soil-dark);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0;}
+
+.main{flex:1;min-width:0;}
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;padding:16px 28px;
+  background:var(--card);border-bottom:1px solid #ECE3CC;position:sticky;top:0;z-index:5;
+}
+.topbar h2{margin:0;font-size:19px;}
+.topbar-right{display:flex;align-items:center;gap:14px;}
+.lang-toggle-light{display:flex;border:1.5px solid #E3D9C0;border-radius:9px;overflow:hidden;}
+.lang-toggle-light button{background:#fff;border:none;padding:7px 13px;font-size:12.5px;font-weight:700;color:var(--ink-soft);}
+.lang-toggle-light button.active{background:var(--leaf);color:#fff;}
+.db-badge{font-size:11px;font-weight:700;padding:5px 10px;border-radius:20px;background:var(--paper-2);color:var(--ink-soft);display:flex;align-items:center;gap:6px;}
+.db-badge .dot{width:7px;height:7px;border-radius:50%;background:var(--gold);}
+.db-badge.cloud .dot{background:var(--leaf);}
+
+.view{padding:26px 28px 60px;max-width:1180px;}
+.view.hidden{display:none;}
+
+/* mobile bottom nav */
+.bottom-nav{display:none;}
+
+/* ---- cards / dashboard ---- */
+.hero-card{
+  background:linear-gradient(120deg,var(--leaf-dark),var(--leaf));color:#fff;border-radius:18px;
+  padding:30px 32px;position:relative;overflow:hidden;margin-bottom:24px;
+}
+.hero-card::before{content:"";position:absolute;inset:auto 0 0 0;height:8px;background:repeating-linear-gradient(90deg,var(--gold) 0 20px, transparent 20px 40px);}
+.hero-card h1{margin:0 0 8px;font-size:26px;color:#fff;}
+.hero-card p{margin:0 0 18px;color:#E1F0DF;font-size:14.5px;max-width:520px;line-height:1.55;}
+
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;}
+.stat-card{background:var(--card);border-radius:14px;padding:18px 18px;box-shadow:var(--shadow);}
+.stat-card b{display:block;font-family:var(--font-mono);font-size:26px;color:var(--leaf-dark);}
+.stat-card span{font-size:12.5px;color:var(--ink-soft);font-weight:600;}
+
+.section-title{display:flex;align-items:center;gap:10px;margin:8px 0 14px;}
+.section-title h3{margin:0;font-size:17px;}
+
+.card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:24px;}
+.form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 18px;}
+.form-grid .field.full{grid-column:1/-1;}
+.field .hint{font-size:11.5px;color:var(--ink-soft);margin-top:4px;}
+.field .unit{font-family:var(--font-mono);font-size:11px;color:var(--gold-dark);font-weight:700;}
+.range-out{font-family:var(--font-mono);font-weight:700;color:var(--leaf-dark);}
+
+.region-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
+.chip{padding:7px 13px;border-radius:20px;border:1.5px solid #E3D9C0;background:#fff;font-size:12.5px;font-weight:600;color:var(--ink-soft);}
+.chip.active{background:var(--gold);border-color:var(--gold);color:var(--soil-dark);}
+
+.submit-row{display:flex;justify-content:flex-end;gap:12px;margin-top:22px;}
+.submit-row .btn{width:auto;padding:13px 28px;}
+
+/* results */
+.results-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:18px;margin-top:8px;}
+.crop-card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;transition:transform .15s, box-shadow .15s;}
+.crop-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);}
+.crop-card .cc-top{padding:18px 18px 14px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #F1EAD8;}
+.crop-emoji{width:46px;height:46px;border-radius:12px;background:var(--paper-2);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;}
+.cc-top h4{margin:0;font-size:16.5px;}
+.cc-top .rank{font-size:11px;color:var(--ink-soft);font-weight:700;text-transform:uppercase;}
+.score-wrap{margin-left:auto;text-align:right;}
+.score-num{font-family:var(--font-mono);font-weight:800;font-size:20px;}
+.score-num.high{color:var(--leaf-dark);}
+.score-num.mid{color:var(--gold-dark);}
+.score-num.low{color:var(--danger);}
+.score-lbl{font-size:10px;color:var(--ink-soft);font-weight:700;}
+.horizon-meter{height:8px;background:var(--paper-2);border-radius:6px;overflow:hidden;margin:0 18px 16px;}
+.horizon-meter i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--leaf-light),var(--leaf));}
+.cc-body{padding:0 18px 18px;font-size:13px;color:var(--ink-soft);line-height:1.55;flex:1;display:flex;flex-direction:column;gap:10px;}
+.cc-row{display:flex;gap:9px;align-items:flex-start;}
+.cc-row .ic{width:18px;flex-shrink:0;text-align:center;margin-top:1px;}
+.cc-row b{color:var(--ink);font-weight:700;}
+
+.empty-state{text-align:center;padding:60px 20px;color:var(--ink-soft);}
+.empty-state .em{font-size:44px;margin-bottom:10px;}
+
+/* history */
+.history-item{display:flex;align-items:center;gap:16px;padding:16px 18px;border-radius:12px;background:var(--card);box-shadow:var(--shadow);margin-bottom:12px;}
+.history-item .hi-date{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);width:120px;flex-shrink:0;}
+.history-item .hi-crops{flex:1;font-size:13.5px;}
+.history-item .hi-crops b{color:var(--leaf-dark);}
+.history-item .hi-loc{font-size:12px;color:var(--ink-soft);}
+
+footer.app-footer{padding:24px 28px;font-size:12px;color:var(--ink-soft);border-top:1px solid #ECE3CC;}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width:980px){
+  .form-grid{grid-template-columns:repeat(2,1fr);}
+  .stat-row{grid-template-columns:repeat(2,1fr);}
+}
+@media (max-width:860px){
+  .auth-hero{display:none;}
+  .auth-panel{padding:20px;}
+}
+@media (max-width:760px){
+  #app.active{flex-direction:column;}
+  .sidebar{display:none;}
+  .main{width:100%;}
+  .view{padding:18px 16px 90px;}
+  .form-grid{grid-template-columns:1fr;}
+  .stat-row{grid-template-columns:repeat(2,1fr);}
+  .topbar{padding:14px 16px;}
+  .topbar h2{font-size:16px;}
+  body.logged-in .bottom-nav{
+    display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--soil-dark);
+    padding:8px 6px calc(8px + env(safe-area-inset-bottom));z-index:20;box-shadow:0 -6px 20px rgba(0,0,0,.15);
+  }
+  .bottom-nav button{
+    flex:1;background:none;border:none;color:#D8CDAF;font-size:10.5px;font-weight:700;
+    display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 0;border-radius:10px;
+  }
+  .bottom-nav button.active{color:var(--gold);}
+  .bottom-nav .ic{font-size:18px;}
+  .hero-card{padding:22px 20px;}
+  .hero-card h1{font-size:21px;}
+}
+</style>
+</head>
+<body>
+
+<!-- ================= AUTH SCREEN ================= -->
+<div id="auth">
+  <div class="auth-hero">
+    <div>
+      <div class="brand"><span class="mark">🌱</span><span data-i18n="brandName">Mannvasam</span></div>
+      <div class="lang-toggle" style="margin-top:24px;">
+        <button data-lang="en" class="lang-btn active">English</button>
+        <button data-lang="ta" class="lang-btn">தமிழ்</button>
+      </div>
+      <h1 data-i18n="heroTitle">Know your soil.<br>Grow the right crop.</h1>
+      <p data-i18n="heroText">Enter your soil nutrients and local climate — our recommendation engine scores crops for suitability and gives you water and fertilizer guidance in seconds.</p>
+    </div>
+    <div class="hero-stats">
+      <div><b>12+</b><span data-i18n="statCrops">Crops modelled</span></div>
+      <div><b>7</b><span data-i18n="statSoil">Soil types</span></div>
+      <div><b>4</b><span data-i18n="statFactors">Climate factors</span></div>
+    </div>
+  </div>
+
+  <div class="auth-panel">
+    <div class="auth-box">
+      <div class="lang-toggle-light" style="width:fit-content;margin-bottom:18px;">
+        <button data-lang="en" class="lang-btn active">EN</button>
+        <button data-lang="ta" class="lang-btn">தமிழ்</button>
+      </div>
+      <div class="auth-tabs">
+        <button id="tabLogin" class="active" data-i18n="tabLogin">Log in</button>
+        <button id="tabSignup" data-i18n="tabSignup">Create account</button>
+      </div>
+      <div class="auth-error" id="authError"></div>
+
+      <form id="loginForm" novalidate>
+        <div class="field"><label data-i18n="fieldEmail">Email</label><input type="email" id="loginEmail" required placeholder="you@farm.com"></div>
+        <div class="field"><label data-i18n="fieldPassword">Password</label><input type="password" id="loginPassword" required placeholder="••••••••"></div>
+        <button type="submit" class="btn" data-i18n="btnLogin">Log in</button>
+        <p class="auth-note hide-if-firebase"><span data-i18n="demoNote">Demo tip: use </span><b>demo@farm.com / demo123</b></p>
+        <button type="button" class="btn btn-outline hide-if-firebase" id="fillDemoBtn" style="margin-top:8px;" data-i18n="btnFillDemo">Fill demo credentials</button>
+      </form>
+
+      <form id="signupForm" class="hidden" novalidate>
+        <div class="field"><label data-i18n="fieldName">Full name</label><input type="text" id="suName" required placeholder="Murugan K."></div>
+        <div class="field"><label data-i18n="fieldEmail">Email</label><input type="email" id="suEmail" required placeholder="you@farm.com"></div>
+        <div class="field"><label data-i18n="fieldPassword">Password</label><input type="password" id="suPassword" required placeholder="Min 6 characters"></div>
+        <button type="submit" class="btn btn-gold" data-i18n="btnSignup">Create account</button>
+      </form>
+
+      <p class="auth-note" id="dbModeNote"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ================= APP SCREEN ================= -->
+<div id="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="mark" style="width:30px;height:30px;font-size:16px;">🌱</span><span data-i18n="brandName">Mannvasam</span></div>
+    <button class="nav-item active" data-view="dashboard"><span class="ic">🏠</span><span data-i18n="navDashboard">Dashboard</span></button>
+    <button class="nav-item" data-view="scan"><span class="ic">🧪</span><span data-i18n="navScan">New Soil Scan</span></button>
+    <button class="nav-item" data-view="history"><span class="ic">📜</span><span data-i18n="navHistory">History</span></button>
+    <button class="nav-item" data-view="about"><span class="ic">ℹ️</span><span data-i18n="navAbout">About</span></button>
+    <div class="sidebar-footer">
+      <div class="user-chip"><div class="avatar" id="avatarLetter">F</div><div><b id="sideUserName" style="display:block;color:#fff;">Farmer</b><span id="sideUserEmail"></span></div></div>
+      <button class="nav-item" id="logoutBtn"><span class="ic">↩</span><span data-i18n="navLogout">Log out</span></button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <h2 id="topbarTitle" data-i18n="navDashboard">Dashboard</h2>
+      <div class="topbar-right">
+        <span class="db-badge" id="dbBadge"><span class="dot"></span><span id="dbBadgeText">Local mode</span></span>
+        <div class="lang-toggle-light">
+          <button data-lang="en" class="lang-btn active">EN</button>
+          <button data-lang="ta" class="lang-btn">தமிழ்</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- DASHBOARD VIEW -->
+    <section class="view" id="view-dashboard">
+      <div class="hero-card">
+        <h1 data-i18n="welcomeBack">Welcome back!</h1>
+        <p data-i18n="welcomeText">Run a soil scan to get AI-ranked crop recommendations tuned to your field's N-P-K, pH and local climate.</p>
+        <button class="btn btn-gold" style="width:auto;padding:12px 24px;" id="goScanBtn" data-i18n="btnNewScan">+ New Soil Scan</button>
+      </div>
+      <div class="stat-row">
+        <div class="stat-card"><b id="statScans">0</b><span data-i18n="statScansLbl">Total scans</span></div>
+        <div class="stat-card"><b id="statTopCrop">–</b><span data-i18n="statTopLbl">Last top crop</span></div>
+        <div class="stat-card"><b id="statTopScore">–</b><span data-i18n="statScoreLbl">Last best score</span></div>
+        <div class="stat-card"><b id="statLoc">–</b><span data-i18n="statLocLbl">Last location</span></div>
+      </div>
+      <div class="section-title"><h3 data-i18n="recentTitle">Recent recommendation</h3></div>
+      <div id="dashboardRecent"></div>
+    </section>
+
+    <!-- SCAN / INPUT VIEW -->
+    <section class="view hidden" id="view-scan">
+      <div class="card">
+        <div class="section-title"><h3 data-i18n="scanTitle">Soil &amp; climate input</h3></div>
+        <div class="horizon-strip" style="margin-bottom:20px;"><span class="o"></span><span class="a"></span><span class="b"></span><span class="c"></span></div>
+
+        <label style="font-size:12.5px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;" data-i18n="regionLbl">Quick-fill by region (optional)</label>
+        <div class="region-chips" id="regionChips"></div>
+
+        <form id="scanForm">
+          <div class="form-grid">
+            <div class="field"><label data-i18n="fN">Nitrogen (N)</label><input type="number" id="inN" min="0" max="140" value="60" required><div class="hint"><span class="unit">kg/ha</span> · <span data-i18n="rangeN">typical 0–140</span></div></div>
+            <div class="field"><label data-i18n="fP">Phosphorus (P)</label><input type="number" id="inP" min="0" max="145" value="40" required><div class="hint"><span class="unit">kg/ha</span> · <span data-i18n="rangeP">typical 5–145</span></div></div>
+            <div class="field"><label data-i18n="fK">Potassium (K)</label><input type="number" id="inK" min="0" max="205" value="45" required><div class="hint"><span class="unit">kg/ha</span> · <span data-i18n="rangeK">typical 5–205</span></div></div>
+
+            <div class="field"><label data-i18n="fPH">Soil pH</label><input type="number" id="inPH" min="0" max="14" step="0.1" value="6.5" required><div class="hint"><span data-i18n="rangePH">0 (acidic) – 14 (alkaline)</span></div></div>
+            <div class="field"><label data-i18n="fTemp">Temperature</label><input type="number" id="inTemp" min="0" max="55" value="27" required><div class="hint"><span class="unit">°C</span> · <span data-i18n="rangeTemp">avg daytime</span></div></div>
+            <div class="field"><label data-i18n="fHumidity">Humidity</label><input type="number" id="inHumidity" min="0" max="100" value="65" required><div class="hint"><span class="unit">%</span> · <span data-i18n="rangeHumidity">relative humidity</span></div></div>
+
+            <div class="field"><label data-i18n="fRainfall">Rainfall</label><input type="number" id="inRainfall" min="0" max="4000" value="900" required><div class="hint"><span class="unit">mm/yr</span></div></div>
+            <div class="field"><label data-i18n="fSoilType">Soil type</label>
+              <select id="inSoilType">
+                <option value="alluvial" data-i18n="soilAlluvial">Alluvial</option>
+                <option value="black" data-i18n="soilBlack">Black (Regur)</option>
+                <option value="red" data-i18n="soilRed">Red</option>
+                <option value="laterite" data-i18n="soilLaterite">Laterite</option>
+                <option value="sandy" data-i18n="soilSandy">Sandy</option>
+                <option value="clay" data-i18n="soilClay">Clay</option>
+                <option value="loamy" data-i18n="soilLoamy">Loamy</option>
+              </select>
+            </div>
+            <div class="field"><label data-i18n="fLocation">Location / district</label><input type="text" id="inLocation" placeholder="e.g. Coimbatore"></div>
+
+            <div class="field full">
+              <label data-i18n="fLocation2">Or tap a region above to auto-fill climate, then adjust as needed.</label>
+            </div>
+          </div>
+
+          <div class="submit-row">
+            <button type="submit" class="btn" style="background:var(--leaf);" id="analyzeBtn"><span data-i18n="btnAnalyze">🔬 Get AI Recommendations</span></button>
+          </div>
+        </form>
+      </div>
+
+      <div id="resultsWrap" style="margin-top:26px;"></div>
+    </section>
+
+    <!-- HISTORY VIEW -->
+    <section class="view hidden" id="view-history">
+      <div class="section-title"><h3 data-i18n="historyTitle">Scan history</h3></div>
+      <div id="historyList"></div>
+    </section>
+
+    <!-- ABOUT VIEW -->
+    <section class="view hidden" id="view-about">
+      <div class="card">
+        <h3 data-i18n="aboutTitle">About this recommendation engine</h3>
+        <p data-i18n="aboutP1" style="line-height:1.7;color:var(--ink-soft);">Mannvasam scores each crop by comparing your entered nitrogen, phosphorus, potassium, pH, temperature, humidity, rainfall and soil type against known agronomic ranges for that crop, then blends the results into a single suitability score out of 100.</p>
+        <p data-i18n="aboutP2" style="line-height:1.7;color:var(--ink-soft);">This is a guidance tool, not a replacement for a certified soil-testing lab or your local agricultural extension officer.</p>
+      </div>
+    </section>
+
+    <footer class="app-footer" data-i18n="footerText">Mannvasam · AI Smart Crop Advisor — built for demonstration purposes.</footer>
+  </div>
+</div>
+
+<div class="bottom-nav" id="bottomNav">
+  <button class="nav-item-mobile active" data-view="dashboard"><span class="ic">🏠</span><span data-i18n="navDashboard">Dashboard</span></button>
+  <button class="nav-item-mobile" data-view="scan"><span class="ic">🧪</span><span data-i18n="navScan">Scan</span></button>
+  <button class="nav-item-mobile" data-view="history"><span class="ic">📜</span><span data-i18n="navHistory">History</span></button>
+  <button class="nav-item-mobile" data-view="about"><span class="ic">ℹ️</span><span data-i18n="navAbout">About</span></button>
+</div>
+
+<script>
+/* =========================================================================
+   FIREBASE CONFIG
+   Replace the placeholder values below with your own Firebase project
+   config (Project settings → General → Your apps → SDK setup) to enable
+   real cloud auth + Firestore sync. Until you do, the app runs safely in
+   an in-memory "local mode" with the same data shape, so every feature
+   below still works for demoing (data resets on page reload).
+   ========================================================================= */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCZAYy7rCFXAiQSs6YvbhWXRCm-8N-8Q7Q",
+  authDomain: "pranesh-2b3b6.firebaseapp.com",
+  projectId: "pranesh-2b3b6",
+  storageBucket: "pranesh-2b3b6.firebasestorage.app",
+  messagingSenderId: "935424148444",
+  appId: "1:935424148444:web:74de764255020a48d18519"
+};
+
+let USE_FIREBASE = false;
+let fbAuth = null, fbDb = null;
+try{
+  if(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY"){
+    firebase.initializeApp(FIREBASE_CONFIG);
+    fbAuth = firebase.auth();
+    fbDb = firebase.firestore();
+    USE_FIREBASE = true;
+  }
+}catch(e){ console.warn("Firebase not configured, using local mode.", e); USE_FIREBASE = false; }
+
+/* =========================================================================
+   LOCAL-MODE DATA ADAPTER (mirrors the Firebase calls used below)
+   NOTE: this environment does not allow browser storage (localStorage/
+   sessionStorage) inside artifacts, so local mode keeps everything in an
+   in-memory object for the current session. Data resets on page reload —
+   plug in FIREBASE_CONFIG above for real persistence across sessions.
+   ========================================================================= */
+const LocalDB = {
+  _mem:{ users:{}, scans:{}, currentUserEmail:null },
+  seedDemo(){
+    if(!this._mem.users['demo@farm.com']) this._mem.users['demo@farm.com'] = {name:'Demo Farmer', email:'demo@farm.com', password:'demo123'};
+  },
+  signUp(name,email,password){
+    if(this._mem.users[email]) throw new Error('EXISTS');
+    this._mem.users[email] = {name,email,password};
+    this._mem.currentUserEmail = email;
+    return {name,email};
+  },
+  signIn(email,password){
+    const u = this._mem.users[email];
+    if(!u || u.password !== password) throw new Error('INVALID');
+    this._mem.currentUserEmail = email;
+    return u;
+  },
+  signOut(){ this._mem.currentUserEmail = null; },
+  currentUser(){
+    if(!this._mem.currentUserEmail) return null;
+    return this._mem.users[this._mem.currentUserEmail] || null;
+  },
+  saveScan(email, scan){
+    if(!this._mem.scans[email]) this._mem.scans[email] = [];
+    this._mem.scans[email].unshift(scan);
+  },
+  getScans(email){
+    return this._mem.scans[email] || [];
+  }
+};
+if(!USE_FIREBASE) LocalDB.seedDemo();
+
+/* =========================================================================
+   I18N
+   ========================================================================= */
+const I18N = {
+en:{
+  brandName:"Mannvasam", heroTitle:"Know your soil.<br>Grow the right crop.",
+  heroText:"Enter your soil nutrients and local climate — our recommendation engine scores crops for suitability and gives you water and fertilizer guidance in seconds.",
+  statCrops:"Crops modelled", statSoil:"Soil types", statFactors:"Climate factors",
+  tabLogin:"Log in", tabSignup:"Create account", fieldEmail:"Email", fieldPassword:"Password", fieldName:"Full name",
+  btnLogin:"Log in", btnSignup:"Create account", demoNote:"Demo tip: use ", btnFillDemo:"Fill demo credentials",
+  navDashboard:"Dashboard", navScan:"New Soil Scan", navHistory:"History", navAbout:"About", navLogout:"Log out",
+  welcomeBack:"Welcome back!", welcomeText:"Run a soil scan to get AI-ranked crop recommendations tuned to your field's N-P-K, pH and local climate.",
+  btnNewScan:"+ New Soil Scan",
+  statScansLbl:"Total scans", statTopLbl:"Last top crop", statScoreLbl:"Last best score", statLocLbl:"Last location",
+  recentTitle:"Recent recommendation",
+  scanTitle:"Soil & climate input", regionLbl:"Quick-fill by region (optional)",
+  fN:"Nitrogen (N)", fP:"Phosphorus (P)", fK:"Potassium (K)", fPH:"Soil pH", fTemp:"Temperature",
+  fHumidity:"Humidity", fRainfall:"Rainfall", fSoilType:"Soil type", fLocation:"Location / district",
+  fLocation2:"Or tap a region above to auto-fill climate, then adjust as needed.",
+  rangeN:"typical 0–140", rangeP:"typical 5–145", rangeK:"typical 5–205", rangePH:"0 (acidic) – 14 (alkaline)",
+  rangeTemp:"avg daytime", rangeHumidity:"relative humidity",
+  soilAlluvial:"Alluvial", soilBlack:"Black (Regur)", soilRed:"Red", soilLaterite:"Laterite",
+  soilSandy:"Sandy", soilClay:"Clay", soilLoamy:"Loamy",
+  btnAnalyze:"🔬 Get AI Recommendations",
+  historyTitle:"Scan history",
+  aboutTitle:"About this recommendation engine",
+  aboutP1:"Mannvasam scores each crop by comparing your entered nitrogen, phosphorus, potassium, pH, temperature, humidity, rainfall and soil type against known agronomic ranges for that crop, then blends the results into a single suitability score out of 100.",
+  aboutP2:"This is a guidance tool, not a replacement for a certified soil-testing lab or your local agricultural extension officer.",
+  footerText:"Mannvasam · AI Smart Crop Advisor — built for demonstration purposes.",
+  resultsTitle:"Recommended crops for your field", waterReq:"Water need", fertGuide:"Fertilizer guidance", tips:"Cultivation tips",
+  emptyHistory:"No scans yet. Run your first soil scan to see it here.",
+  emptyResults:"Fill in your soil and climate data, then tap “Get AI Recommendations”.",
+  scoreHigh:"Highly suitable", scoreMid:"Moderately suitable", scoreLow:"Low suitability",
+  errFill:"Please fill in every field before analyzing.", errLogin:"Incorrect email or password.",
+  errExists:"An account with this email already exists.", errGeneric:"Something went wrong. Try again.",
+  errFillAuth:"Please enter both email and password.", errShortPw:"Password must be at least 6 characters.",
+  localMode:"Local mode", cloudMode:"Cloud synced (Firebase)"
+},
+ta:{
+  brandName:"மண்வாசம்", heroTitle:"உங்கள் மண்ணை அறியுங்கள்.<br>சரியான பயிரை வளருங்கள்.",
+  heroText:"உங்கள் மண் சத்துக்கள் மற்றும் காலநிலை விவரங்களை உள்ளிடவும் — எங்கள் AI பொருத்தப்பாட்டு மதிப்பெண்ணுடன் நீர் மற்றும் உர வழிகாட்டுதலை வினாடிகளில் பெறுங்கள்.",
+  statCrops:"பயிர்கள்", statSoil:"மண் வகைகள்", statFactors:"காலநிலை காரணிகள்",
+  tabLogin:"உள்நுழைய", tabSignup:"கணக்கு உருவாக்க", fieldEmail:"மின்னஞ்சல்", fieldPassword:"கடவுச்சொல்", fieldName:"முழுப் பெயர்",
+  btnLogin:"உள்நுழைய", btnSignup:"கணக்கு உருவாக்க", demoNote:"டெமோ: இதைப் பயன்படுத்தவும் ", btnFillDemo:"டெமோ விவரங்களை நிரப்பு",
+  navDashboard:"முகப்பு", navScan:"புதிய மண் பரிசோதனை", navHistory:"வரலாறு", navAbout:"விவரம்", navLogout:"வெளியேறு",
+  welcomeBack:"மீண்டும் வருக!", welcomeText:"உங்கள் நிலத்தின் N-P-K, pH மற்றும் காலநிலைக்கு ஏற்ப AI பரிந்துரைகளைப் பெற ஒரு மண் பரிசோதனையை இயக்கவும்.",
+  btnNewScan:"+ புதிய மண் பரிசோதனை",
+  statScansLbl:"மொத்த பரிசோதனைகள்", statTopLbl:"கடைசி சிறந்த பயிர்", statScoreLbl:"கடைசி சிறந்த மதிப்பெண்", statLocLbl:"கடைசி இடம்",
+  recentTitle:"சமீபத்திய பரிந்துரை",
+  scanTitle:"மண் & காலநிலை தகவல்", regionLbl:"பிராந்தியம் மூலம் விரைவாக நிரப்ப (விருப்பம்)",
+  fN:"நைட்ரஜன் (N)", fP:"பாஸ்பரஸ் (P)", fK:"பொட்டாசியம் (K)", fPH:"மண் pH", fTemp:"வெப்பநிலை",
+  fHumidity:"ஈரப்பதம்", fRainfall:"மழைப்பொழிவு", fSoilType:"மண் வகை", fLocation:"இடம் / மாவட்டம்",
+  fLocation2:"மேலே உள்ள பிராந்தியத்தைத் தட்டி காலநிலையை தானாக நிரப்பலாம், பின் தேவைக்கேற்ப மாற்றவும்.",
+  rangeN:"வழக்கமாக 0–140", rangeP:"வழக்கமாக 5–145", rangeK:"வழக்கமாக 5–205", rangePH:"0 (அமிலம்) – 14 (காரம்)",
+  rangeTemp:"பகல் சராசரி", rangeHumidity:"சார்பு ஈரப்பதம்",
+  soilAlluvial:"வண்டல் மண்", soilBlack:"கரு மண் (ரேகுர்)", soilRed:"செம்மண்", soilLaterite:"லேட்டரைட் மண்",
+  soilSandy:"மணல் மண்", soilClay:"களிமண்", soilLoamy:"நல்ல கலப்பு மண்",
+  btnAnalyze:"🔬 AI பரிந்துரைகளைப் பெறவும்",
+  historyTitle:"பரிசோதனை வரலாறு",
+  aboutTitle:"இந்த பரிந்துரை அமைப்பு பற்றி",
+  aboutP1:"நீங்கள் உள்ளிடும் நைட்ரஜன், பாஸ்பரஸ், பொட்டாசியம், pH, வெப்பநிலை, ஈரப்பதம், மழைப்பொழிவு மற்றும் மண் வகையை ஒவ்வொரு பயிரின் ஏற்ற வரம்புகளுடன் ஒப்பிட்டு, மண்வாசம் ஒரு ஒருங்கிணைந்த பொருத்தப்பாட்டு மதிப்பெண்ணை (100-க்கு) கணக்கிடுகிறது.",
+  aboutP2:"இது ஒரு வழிகாட்டி கருவி மட்டுமே — சான்றளிக்கப்பட்ட மண் பரிசோதனை ஆய்வகம் அல்லது உங்கள் வேளாண் அலுவலரின் ஆலோசனைக்கு மாற்றாக இல்லை.",
+  footerText:"மண்வாசம் · AI ஸ்மார்ட் பயிர் ஆலோசகர் — விளக்கக் காட்சிக்காக உருவாக்கப்பட்டது.",
+  resultsTitle:"உங்கள் நிலத்திற்கான பரிந்துரைக்கப்பட்ட பயிர்கள்", waterReq:"நீர் தேவை", fertGuide:"உர வழிகாட்டுதல்", tips:"பயிரிடும் குறிப்புகள்",
+  emptyHistory:"இதுவரை பரிசோதனைகள் இல்லை. முதல் மண் பரிசோதனையை இயக்கவும்.",
+  emptyResults:"உங்கள் மண் மற்றும் காலநிலை தரவை நிரப்பி, “AI பரிந்துரைகளைப் பெறவும்” என்பதைத் தட்டவும்.",
+  scoreHigh:"மிகவும் ஏற்றது", scoreMid:"மிதமாக ஏற்றது", scoreLow:"குறைந்த ஏற்புத்தன்மை",
+  errFill:"பகுப்பாய்வு செய்யும் முன் அனைத்து புலங்களையும் நிரப்பவும்.", errLogin:"தவறான மின்னஞ்சல் அல்லது கடவுச்சொல்.",
+  errExists:"இந்த மின்னஞ்சலுடன் ஏற்கனவே ஒரு கணக்கு உள்ளது.", errGeneric:"ஏதோ தவறு நேர்ந்தது. மீண்டும் முயற்சிக்கவும்.",
+  errFillAuth:"மின்னஞ்சல் மற்றும் கடவுச்சொல் இரண்டையும் உள்ளிடவும்.", errShortPw:"கடவுச்சொல் குறைந்தது 6 எழுத்துகள் இருக்க வேண்டும்.",
+  localMode:"லோக்கல் முறை", cloudMode:"Firebase ஒத்திசைவு"
+}
+};
+let currentLang = 'en';
+function t(key){ return I18N[currentLang][key] || I18N.en[key] || key; }
+function applyI18n(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const key = el.getAttribute('data-i18n');
+    if(I18N[currentLang][key]) el.innerHTML = I18N[currentLang][key];
+  });
+  document.body.classList.toggle('lang-ta', currentLang==='ta');
+  document.querySelectorAll('.lang-btn').forEach(b=>b.classList.toggle('active', b.dataset.lang===currentLang));
+  renderRegionChips();
+  renderResults(lastResults, lastInputs);
+  renderDashboard();
+  renderHistory();
+}
+document.querySelectorAll('.lang-btn').forEach(b=>b.addEventListener('click', ()=>{ currentLang=b.dataset.lang; applyI18n(); }));
+
+/* =========================================================================
+   CROP KNOWLEDGE BASE
+   ideal ranges are simplified agronomic guides for demonstration purposes.
+   ========================================================================= */
+const CROPS = [
+{id:'rice', emoji:'🌾', name:{en:'Rice',ta:'நெல்'}, soils:['alluvial','clay','loamy'],
+  N:[80,120], P:[35,60], K:[35,55], pH:[5.5,7.0], temp:[20,35], humidity:[60,90], rain:[1000,2500],
+  water:{en:'Very high — needs standing water for most of the growth cycle.',ta:'மிக அதிகம் — வளர்ச்சிக் காலம் முழுவதும் நின்ற நீர் தேவை.'},
+  fert:{en:'Split N in 3 doses; basal P & K at transplanting; add zinc sulphate on deficient soils.',ta:'N-ஐ 3 முறை பிரித்து இடவும்; நடவின்போது P & K அடிப்படை உரமாக இடவும்; துத்தநாக குறைபாடு உள்ள மண்ணில் ஜிங்க் சல்பேட் சேர்க்கவும்.'},
+  tips:{en:'Puddle the field before transplanting; maintain 2-5cm water depth; control weeds in first 30 days.',ta:'நடவுக்கு முன் வயலை சேறாக்கவும்; 2-5செமீ நீர் மட்டத்தை பராமரிக்கவும்; முதல் 30 நாட்களில் களைகளை கட்டுப்படுத்தவும்.'}},
+{id:'wheat', emoji:'🌿', name:{en:'Wheat',ta:'கோதுமை'}, soils:['alluvial','loamy','black'],
+  N:[100,140], P:[50,70], K:[35,55], pH:[6.0,7.5], temp:[10,25], humidity:[40,70], rain:[400,900],
+  water:{en:'Moderate — 4 to 6 irrigations across the crop cycle.',ta:'மிதமானது — பயிர் காலத்தில் 4-6 நீர்ப்பாசனங்கள்.'},
+  fert:{en:'Full P & K at sowing; N in 2 splits at crown-root initiation and jointing.',ta:'விதைக்கும்போது முழு P & K; N-ஐ வேர் தொடக்கம் மற்றும் இணைப்பு நிலையில் 2 முறை இடவும்.'},
+  tips:{en:'Sow after soil moisture is adequate; ensure timely first irrigation 20-25 days after sowing.',ta:'போதுமான மண் ஈரப்பதம் இருக்கும்போது விதைக்கவும்; விதைத்த 20-25 நாட்களில் முதல் நீர்ப்பாசனம் செய்யவும்.'}},
+{id:'maize', emoji:'🌽', name:{en:'Maize',ta:'சோளம்'}, soils:['alluvial','loamy','red','black'],
+  N:[80,120], P:[40,60], K:[30,50], pH:[5.8,7.5], temp:[18,32], humidity:[50,80], rain:[500,1200],
+  water:{en:'Moderate — sensitive to water stress at tasseling and grain-filling.',ta:'மிதமானது — பூக்கும் மற்றும் மணி நிரப்பும் நிலையில் நீர் பற்றாக்குறைக்கு உணர்திறன்.'},
+  fert:{en:'Basal P & K; N in 3 splits — sowing, knee-high, tasseling.',ta:'அடிப்படை P & K; N-ஐ 3 முறை — விதைப்பு, முழங்கால் உயரம், பூக்கும் நிலை.'},
+  tips:{en:'Maintain plant spacing for airflow; earth-up at knee-high stage to support roots.',ta:'காற்றோட்டத்திற்காக செடி இடைவெளியை பராமரிக்கவும்; முழங்கால் உயரத்தில் மண் அணைக்கவும்.'}},
+{id:'cotton', emoji:'☁️', name:{en:'Cotton',ta:'பருத்தி'}, soils:['black','alluvial','red'],
+  N:[80,120], P:[30,50], K:[30,60], pH:[6.0,8.0], temp:[21,35], humidity:[50,80], rain:[600,1100],
+  water:{en:'Moderate — avoid waterlogging; critical at flowering and boll development.',ta:'மிதமானது — நீர் தேங்குவதை தவிர்க்கவும்; பூக்கும் மற்றும் காய் வளர்ச்சியில் முக்கியம்.'},
+  fert:{en:'Basal P & K at sowing; N split into 3-4 doses through vegetative to boll stage.',ta:'விதைப்பில் அடிப்படை P & K; N-ஐ வளர்ச்சி முதல் காய் நிலை வரை 3-4 முறை இடவும்.'},
+  tips:{en:'Deep black soils suit rainfed cotton best; monitor for bollworm from flowering onward.',ta:'ஆழமான கருமண் மழை நம்பிய பருத்திக்கு சிறந்தது; பூக்கும் காலத்திலிருந்து காய்ப்புழுவை கண்காணிக்கவும்.'}},
+{id:'sugarcane', emoji:'🎋', name:{en:'Sugarcane',ta:'கரும்பு'}, soils:['alluvial','loamy','black','clay'],
+  N:[150,220], P:[50,80], K:[80,120], pH:[6.0,7.5], temp:[21,32], humidity:[65,90], rain:[1200,2500],
+  water:{en:'Very high — frequent irrigation every 7-10 days in dry spells.',ta:'மிக அதிகம் — வறட்சி காலத்தில் ஒவ்வொரு 7-10 நாட்களுக்கும் நீர்ப்பாசனம்.'},
+  fert:{en:'Heavy N-P-K feeder; apply in 3-4 splits with FYM at planting.',ta:'அதிக N-P-K தேவைப்படும் பயிர்; நடவின்போது தொழு உரத்துடன் 3-4 முறை இடவும்.'},
+  tips:{en:'Plant healthy 3-budded setts; earth-up at 45 and 90 days to prevent lodging.',ta:'ஆரோக்கியமான 3-மொட்டு துண்டுகளை நடவும்; சாய்வதைத் தடுக்க 45, 90 நாட்களில் மண் அணைக்கவும்.'}},
+{id:'groundnut', emoji:'🥜', name:{en:'Groundnut',ta:'வேர்க்கடலை'}, soils:['sandy','red','loamy'],
+  N:[15,30], P:[40,60], K:[40,60], pH:[6.0,7.0], temp:[22,32], humidity:[50,75], rain:[500,1000],
+  water:{en:'Low to moderate — light irrigation at pegging and pod-development stages.',ta:'குறைவு முதல் மிதமானது — பூச்சூடி மற்றும் காய் வளர்ச்சி நிலையில் இலேசான நீர்ப்பாசனம்.'},
+  fert:{en:'Low N (it fixes its own via root nodules); apply gypsum at pegging for pod filling.',ta:'குறைந்த N தேவை (வேர் முடிச்சு மூலம் தானே பெறும்); பூச்சூடி நிலையில் ஜிப்சம் இடவும்.'},
+  tips:{en:'Prefers well-drained sandy loam; avoid waterlogging which rots pods.',ta:'நல்ல வடிகால் உள்ள மணல் கலந்த மண்ணை விரும்பும்; நீர் தேங்குவது காய்களை அழுகச் செய்யும்.'}},
+{id:'pearlmillet', emoji:'🌾', name:{en:'Pearl Millet (Bajra)',ta:'கம்பு'}, soils:['sandy','red','black'],
+  N:[40,60], P:[20,35], K:[15,25], pH:[6.0,8.0], temp:[25,35], humidity:[30,60], rain:[300,600],
+  water:{en:'Low — highly drought tolerant, minimal irrigation needed.',ta:'குறைவு — வறட்சியை நன்கு தாங்கும், குறைந்த நீர்ப்பாசனம் போதும்.'},
+  fert:{en:'Light N-P dose at sowing; top-dress N once at 25-30 days.',ta:'விதைப்பில் இலேசான N-P; 25-30 நாட்களில் ஒருமுறை N மேலுரம் இடவும்.'},
+  tips:{en:'Excellent for arid, low-rainfall regions and marginal sandy soils.',ta:'வறண்ட, குறைந்த மழைப்பொழிவு பகுதிகளுக்கும் மணல் மண்ணுக்கும் சிறந்தது.'}},
+{id:'chickpea', emoji:'🫘', name:{en:'Chickpea (Gram)',ta:'கொண்டைக்கடலை'}, soils:['black','loamy','alluvial'],
+  N:[15,25], P:[40,60], K:[15,25], pH:[6.0,7.5], temp:[15,28], humidity:[40,65], rain:[350,700],
+  water:{en:'Low — 1-2 irrigations at branching and pod-filling if rainfall is insufficient.',ta:'குறைவு — மழை போதாதபோது கிளைப்பு, காய் நிரப்பும் நிலையில் 1-2 நீர்ப்பாசனம்.'},
+  fert:{en:'Minimal N needed (legume); apply full P & K as basal dose.',ta:'குறைந்த N போதும் (பருப்பு வகை); முழு P & K அடிப்படை உரமாக இடவும்.'},
+  tips:{en:'Grow as a winter (rabi) crop; avoid excess moisture which causes root rot.',ta:'குளிர்கால (ரபி) பயிராக வளர்க்கவும்; அதிக ஈரப்பதம் வேர் அழுகலை ஏற்படுத்தும்.'}},
+{id:'banana', emoji:'🍌', name:{en:'Banana',ta:'வாழை'}, soils:['alluvial','loamy','clay'],
+  N:[150,220], P:[35,60], K:[200,300], pH:[6.0,7.5], temp:[22,32], humidity:[65,90], rain:[1200,2000],
+  water:{en:'Very high — regular drip irrigation year-round.',ta:'மிக அதிகம் — ஆண்டு முழுவதும் தொடர்ந்து சொட்டு நீர்ப்பாசனம்.'},
+  fert:{en:'Heavy K feeder; apply N-P-K monthly through fertigation with organic manure basal dose.',ta:'அதிக K தேவை; இயற்கை உரத்துடன் மாதந்தோறும் N-P-K ஃபெர்ட்டிகேஷன் மூலம் இடவும்.'},
+  tips:{en:'Provide wind-breaks; prop mature plants to prevent toppling under bunch weight.',ta:'காற்று தடுப்பு ஏற்படுத்தவும்; குலை எடையால் விழாமல் தாங்கு கொடுக்கவும்.'}},
+{id:'coconut', emoji:'🥥', name:{en:'Coconut',ta:'தேங்காய்'}, soils:['sandy','alluvial','laterite','red'],
+  N:[50,80], P:[30,50], K:[100,150], pH:[5.5,8.0], temp:[24,32], humidity:[65,90], rain:[1200,2500],
+  water:{en:'High — young palms need frequent watering; established palms are more tolerant.',ta:'அதிகம் — இளம் மரங்களுக்கு அடிக்கடி நீர் தேவை; வளர்ந்த மரங்கள் தாங்கும் திறன் கொண்டவை.'},
+  fert:{en:'Apply N-P-K plus organic manure twice a year, in basins around the trunk.',ta:'ஆண்டுக்கு இருமுறை N-P-K உடன் தொழு உரத்தை அடிமரத்தைச் சுற்றி இடவும்.'},
+  tips:{en:'Suits coastal sandy soils well; ensure good drainage despite high water need.',ta:'கடலோர மணல் மண்ணுக்கு ஏற்றது; அதிக நீர் தேவை இருந்தாலும் நல்ல வடிகால் உறுதி செய்யவும்.'}},
+{id:'chili', emoji:'🌶️', name:{en:'Chili',ta:'மிளகாய்'}, soils:['red','black','loamy','sandy'],
+  N:[60,100], P:[40,60], K:[40,60], pH:[6.0,7.0], temp:[20,30], humidity:[50,75], rain:[600,1200],
+  water:{en:'Moderate — drip irrigation every 5-7 days works well.',ta:'மிதமானது — ஒவ்வொரு 5-7 நாட்களுக்கும் சொட்டு நீர்ப்பாசனம் ஏற்றது.'},
+  fert:{en:'Basal FYM and P & K; N in split doses every 3-4 weeks.',ta:'அடிப்படையாக தொழு உரம் மற்றும் P & K; N-ஐ ஒவ்வொரு 3-4 வாரங்களுக்கும் இடவும்.'},
+  tips:{en:'Use raised beds for drainage; stake plants once fruiting begins.',ta:'வடிகாலுக்காக உயர்த்தப்பட்ட படுகைகளை பயன்படுத்தவும்; காய்க்கத் தொடங்கியதும் தாங்கு கொடுக்கவும்.'}},
+{id:'tomato', emoji:'🍅', name:{en:'Tomato',ta:'தக்காளி'}, soils:['loamy','alluvial','red','sandy'],
+  N:[90,120], P:[50,70], K:[60,90], pH:[6.0,7.0], temp:[18,28], humidity:[50,70], rain:[500,900],
+  water:{en:'Moderate to high — consistent moisture, avoid fluctuation to prevent fruit cracking.',ta:'மிதமானது முதல் அதிகம் — சீரான ஈரப்பதம், காய் வெடிப்பைத் தவிர்க்க மாறுபாட்டைத் தவிர்க்கவும்.'},
+  fert:{en:'Basal P & K; N and K top-dressed at flowering and fruit-set.',ta:'அடிப்படை P & K; பூக்கும் மற்றும் காய் பிடிக்கும் நிலையில் N மற்றும் K மேலுரமாக இடவும்.'},
+  tips:{en:'Stake or cage plants; mulch to conserve moisture and reduce fruit rot.',ta:'செடிகளுக்கு தாங்கு கொடுக்கவும்; ஈரப்பதத்தைப் பாதுகாக்க மற்றும் அழுகலைக் குறைக்க மல்ச் செய்யவும்.'}}
+];
+
+/* soil-type partial compatibility groups (used when exact soil not listed) */
+const SOIL_NEIGHBORS = {
+  alluvial:['loamy','clay'], black:['clay','red'], red:['laterite','sandy'],
+  laterite:['red','sandy'], sandy:['red','laterite'], clay:['alluvial','black'], loamy:['alluvial','clay']
+};
+
+const REGIONS = [
+  {key:'chennai', label_en:'Chennai, TN', label_ta:'சென்னை', temp:31, humidity:75, rain:1400, soil:'alluvial'},
+  {key:'coimbatore', label_en:'Coimbatore, TN', label_ta:'கோயம்புத்தூர்', temp:27, humidity:60, rain:700, soil:'red'},
+  {key:'madurai', label_en:'Madurai, TN', label_ta:'மதுரை', temp:30, humidity:55, rain:850, soil:'black'},
+  {key:'thanjavur', label_en:'Thanjavur, TN', label_ta:'தஞ்சாவூர்', temp:29, humidity:72, rain:1000, soil:'alluvial'},
+  {key:'punjab', label_en:'Punjab', label_ta:'பஞ்சாப்', temp:24, humidity:55, rain:650, soil:'alluvial'},
+  {key:'maharashtra', label_en:'Maharashtra (Deccan)', label_ta:'மகாராஷ்டிரா', temp:28, humidity:50, rain:750, soil:'black'},
+  {key:'kerala', label_en:'Kerala', label_ta:'கேரளா', temp:28, humidity:85, rain:2600, soil:'laterite'}
+];
+
+/* =========================================================================
+   SCORING ENGINE
+   ========================================================================= */
+function rangeScore(val, range, tolerance){
+  const [lo,hi] = range;
+  if(val >= lo && val <= hi) return 1;
+  const dist = val < lo ? lo - val : val - hi;
+  const span = tolerance ?? ((hi - lo) || 1);
+  return Math.max(0, 1 - dist/span);
+}
+function soilScore(soilType, cropSoils){
+  if(cropSoils.includes(soilType)) return 1;
+  const neighbors = SOIL_NEIGHBORS[soilType] || [];
+  if(neighbors.some(n=>cropSoils.includes(n))) return 0.45;
+  return 0.15;
+}
+function computeRecommendations(inputs){
+  const weights = {N:.12,P:.12,K:.12,pH:.12,temp:.15,humidity:.12,rain:.15,soil:.10};
+  return CROPS.map(crop=>{
+    const sN = rangeScore(inputs.N, crop.N, 60);
+    const sP = rangeScore(inputs.P, crop.P, 50);
+    const sK = rangeScore(inputs.K, crop.K, 60);
+    const sPH = rangeScore(inputs.pH, crop.pH, 1.5);
+    const sTemp = rangeScore(inputs.temp, crop.temp, 8);
+    const sHum = rangeScore(inputs.humidity, crop.humidity, 25);
+    const sRain = rangeScore(inputs.rain, crop.rain, 500);
+    const sSoil = soilScore(inputs.soilType, crop.soils);
+    const total = sN*weights.N + sP*weights.P + sK*weights.K + sPH*weights.pH +
+                  sTemp*weights.temp + sHum*weights.humidity + sRain*weights.rain + sSoil*weights.soil;
+    return {crop, score: Math.round(total*100)};
+  }).sort((a,b)=>b.score-a.score).slice(0,6);
+}
+
+/* =========================================================================
+   AUTH FLOW
+   ========================================================================= */
+let currentUser = null;
+const tabLogin = document.getElementById('tabLogin'), tabSignup = document.getElementById('tabSignup');
+const loginForm = document.getElementById('loginForm'), signupForm = document.getElementById('signupForm');
+tabLogin.addEventListener('click', ()=>{ tabLogin.classList.add('active'); tabSignup.classList.remove('active'); loginForm.classList.remove('hidden'); signupForm.classList.add('hidden'); hideAuthError(); });
+tabSignup.addEventListener('click', ()=>{ tabSignup.classList.add('active'); tabLogin.classList.remove('active'); signupForm.classList.remove('hidden'); loginForm.classList.add('hidden'); hideAuthError(); });
+function showAuthError(msg){ const e=document.getElementById('authError'); e.textContent=msg; e.style.display='block'; }
+function hideAuthError(){ document.getElementById('authError').style.display='none'; }
+
+document.getElementById('dbModeNote').textContent = USE_FIREBASE
+  ? '☁ Connected to Firebase.'
+  : '⚠ Running in local demo mode — add your Firebase config in the script to enable cloud sync.';
+if(USE_FIREBASE){
+  document.querySelectorAll('.hide-if-firebase').forEach(el=>el.style.display='none');
+}
+
+document.getElementById('fillDemoBtn').addEventListener('click', ()=>{
+  document.getElementById('loginEmail').value = 'demo@farm.com';
+  document.getElementById('loginPassword').value = 'demo123';
+  hideAuthError();
+});
+
+loginForm.addEventListener('submit', async (e)=>{
+  e.preventDefault(); hideAuthError();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if(!email || !password){ showAuthError(t('errFillAuth')); return; }
+  try{
+    if(USE_FIREBASE){
+      const cred = await fbAuth.signInWithEmailAndPassword(email, password);
+      const doc = await fbDb.collection('users').doc(cred.user.uid).get();
+      currentUser = doc.exists ? doc.data() : {name:email.split('@')[0], email};
+    } else {
+      currentUser = LocalDB.signIn(email, password);
+    }
+    enterApp();
+  }catch(err){ showAuthError(t('errLogin')); }
+});
+
+signupForm.addEventListener('submit', async (e)=>{
+  e.preventDefault(); hideAuthError();
+  const name = document.getElementById('suName').value.trim();
+  const email = document.getElementById('suEmail').value.trim();
+  const password = document.getElementById('suPassword').value;
+  if(!name || !email || !password){ showAuthError(t('errFillAuth')); return; }
+  if(password.length < 6){ showAuthError(t('errShortPw')); return; }
+  try{
+    if(USE_FIREBASE){
+      const cred = await fbAuth.createUserWithEmailAndPassword(email, password);
+      await fbDb.collection('users').doc(cred.user.uid).set({name, email});
+      currentUser = {name, email};
+    } else {
+      currentUser = LocalDB.signUp(name, email, password);
+    }
+    enterApp();
+  }catch(err){
+    showAuthError(err.message==='EXISTS' ? t('errExists') : t('errGeneric'));
+  }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+  if(USE_FIREBASE) await fbAuth.signOut(); else LocalDB.signOut();
+  currentUser = null;
+  document.getElementById('app').classList.remove('active');
+  document.body.classList.remove('logged-in');
+  document.getElementById('auth').style.display = 'flex';
+});
+
+function enterApp(){
+  document.getElementById('auth').style.display = 'none';
+  document.getElementById('app').classList.add('active');
+  document.body.classList.add('logged-in');
+  document.getElementById('sideUserName').textContent = currentUser.name || currentUser.email;
+  document.getElementById('sideUserEmail').textContent = currentUser.email;
+  document.getElementById('avatarLetter').textContent = (currentUser.name||currentUser.email||'F').charAt(0).toUpperCase();
+  const badge = document.getElementById('dbBadge');
+  badge.classList.toggle('cloud', USE_FIREBASE);
+  document.getElementById('dbBadgeText').textContent = USE_FIREBASE ? t('cloudMode') : t('localMode');
+  switchView('dashboard');
+  renderDashboard();
+  renderHistory();
+}
+
+/* =========================================================================
+   VIEW SWITCHING
+   ========================================================================= */
+function switchView(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
+  document.getElementById('view-'+name).classList.remove('hidden');
+  document.querySelectorAll('.nav-item[data-view]').forEach(b=>b.classList.toggle('active', b.dataset.view===name));
+  document.querySelectorAll('.nav-item-mobile').forEach(b=>b.classList.toggle('active', b.dataset.view===name));
+  document.getElementById('topbarTitle').textContent = document.querySelector(`.nav-item[data-view="${name}"] span:last-child`).textContent;
+}
+document.querySelectorAll('.nav-item[data-view], .nav-item-mobile').forEach(b=>{
+  b.addEventListener('click', ()=>switchView(b.dataset.view));
+});
+document.getElementById('goScanBtn').addEventListener('click', ()=>switchView('scan'));
+
+/* =========================================================================
+   REGION QUICK-FILL
+   ========================================================================= */
+function renderRegionChips(){
+  const wrap = document.getElementById('regionChips');
+  wrap.innerHTML = REGIONS.map(r=>`<button type="button" class="chip" data-key="${r.key}">${currentLang==='ta'?r.label_ta:r.label_en}</button>`).join('');
+  wrap.querySelectorAll('.chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      wrap.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      const r = REGIONS.find(x=>x.key===chip.dataset.key);
+      document.getElementById('inTemp').value = r.temp;
+      document.getElementById('inHumidity').value = r.humidity;
+      document.getElementById('inRainfall').value = r.rain;
+      document.getElementById('inSoilType').value = r.soil;
+      document.getElementById('inLocation').value = currentLang==='ta'? r.label_ta : r.label_en;
+    });
+  });
+}
+
+/* =========================================================================
+   SCAN SUBMIT + RESULTS RENDER
+   ========================================================================= */
+let lastResults = null, lastInputs = null;
+document.getElementById('scanForm').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const inputs = {
+    N: parseFloat(document.getElementById('inN').value),
+    P: parseFloat(document.getElementById('inP').value),
+    K: parseFloat(document.getElementById('inK').value),
+    pH: parseFloat(document.getElementById('inPH').value),
+    temp: parseFloat(document.getElementById('inTemp').value),
+    humidity: parseFloat(document.getElementById('inHumidity').value),
+    rain: parseFloat(document.getElementById('inRainfall').value),
+    soilType: document.getElementById('inSoilType').value,
+    location: document.getElementById('inLocation').value.trim()
+  };
+  if(Object.values(inputs).some(v=>v===''||v===null||Number.isNaN(v))){ alert(t('errFill')); return; }
+
+  const results = computeRecommendations(inputs);
+  lastResults = results; lastInputs = inputs;
+  renderResults(results, inputs);
+
+  const scan = {date:new Date().toISOString(), inputs, results: results.map(r=>({id:r.crop.id, score:r.score}))};
+  if(USE_FIREBASE){
+    fbDb.collection('users').doc(currentUser.email).collection('scans').add(scan).catch(console.warn);
+  } else {
+    LocalDB.saveScan(currentUser.email, scan);
+  }
+  renderDashboard(); renderHistory();
+  document.getElementById('resultsWrap').scrollIntoView({behavior:'smooth', block:'start'});
+});
+
+function scoreClass(score){ return score>=75?'high':score>=50?'mid':'low'; }
+function scoreLabel(score){ return score>=75?t('scoreHigh'):score>=50?t('scoreMid'):t('scoreLow'); }
+
+function renderResults(results, inputs){
+  const wrap = document.getElementById('resultsWrap');
+  if(!results){ wrap.innerHTML = `<div class="empty-state"><div class="em">🌱</div><p>${t('emptyResults')}</p></div>`; return; }
+  wrap.innerHTML = `
+    <div class="section-title"><h3>${t('resultsTitle')}</h3></div>
+    <div class="results-grid">
+      ${results.map((r,i)=>`
+        <div class="crop-card">
+          <div class="cc-top">
+            <div class="crop-emoji">${r.crop.emoji}</div>
+            <div><h4>${r.crop.name[currentLang]}</h4><span class="rank">#${i+1}</span></div>
+            <div class="score-wrap">
+              <div class="score-num ${scoreClass(r.score)}">${r.score}</div>
+              <div class="score-lbl">${scoreLabel(r.score)}</div>
+            </div>
+          </div>
+          <div class="horizon-meter"><i style="width:${r.score}%"></i></div>
+          <div class="cc-body">
+            <div class="cc-row"><span class="ic">💧</span><span><b>${t('waterReq')}:</b> ${r.crop.water[currentLang]}</span></div>
+            <div class="cc-row"><span class="ic">🧪</span><span><b>${t('fertGuide')}:</b> ${r.crop.fert[currentLang]}</span></div>
+            <div class="cc-row"><span class="ic">🌱</span><span><b>${t('tips')}:</b> ${r.crop.tips[currentLang]}</span></div>
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
+}
+
+/* =========================================================================
+   DASHBOARD + HISTORY RENDER
+   ========================================================================= */
+function getAllScans(){
+  return USE_FIREBASE ? (window._cachedScans||[]) : LocalDB.getScans(currentUser.email);
+}
+async function refreshFirebaseScans(){
+  if(!USE_FIREBASE || !currentUser) return;
+  const snap = await fbDb.collection('users').doc(currentUser.email).collection('scans').orderBy('date','desc').get();
+  window._cachedScans = snap.docs.map(d=>d.data());
+  renderDashboard(); renderHistory();
+}
+function renderDashboard(){
+  if(!currentUser) return;
+  const scans = getAllScans();
+  document.getElementById('statScans').textContent = scans.length;
+  if(scans.length){
+    const last = scans[0];
+    const top = last.results[0];
+    const topCrop = CROPS.find(c=>c.id===top.id);
+    document.getElementById('statTopCrop').textContent = topCrop.name[currentLang];
+    document.getElementById('statTopScore').textContent = top.score+'%';
+    document.getElementById('statLoc').textContent = last.inputs.location || '—';
+    const results = last.results.map(r=>({crop:CROPS.find(c=>c.id===r.id), score:r.score}));
+    document.getElementById('dashboardRecent').innerHTML = `<div class="results-grid">` +
+      results.slice(0,3).map((r,i)=>`
+        <div class="crop-card">
+          <div class="cc-top">
+            <div class="crop-emoji">${r.crop.emoji}</div>
+            <div><h4>${r.crop.name[currentLang]}</h4><span class="rank">#${i+1}</span></div>
+            <div class="score-wrap"><div class="score-num ${scoreClass(r.score)}">${r.score}</div><div class="score-lbl">${scoreLabel(r.score)}</div></div>
+          </div>
+          <div class="horizon-meter"><i style="width:${r.score}%"></i></div>
+        </div>`).join('') + `</div>`;
+  } else {
+    document.getElementById('statTopCrop').textContent = '–';
+    document.getElementById('statTopScore').textContent = '–';
+    document.getElementById('statLoc').textContent = '–';
+    document.getElementById('dashboardRecent').innerHTML = `<div class="empty-state"><div class="em">🧺</div><p>${t('emptyHistory')}</p></div>`;
+  }
+}
+function renderHistory(){
+  if(!currentUser) return;
+  const scans = getAllScans();
+  const list = document.getElementById('historyList');
+  if(!scans.length){ list.innerHTML = `<div class="empty-state"><div class="em">📜</div><p>${t('emptyHistory')}</p></div>`; return; }
+  list.innerHTML = scans.map(s=>{
+    const d = new Date(s.date);
+    const names = s.results.slice(0,3).map(r=>{
+      const c = CROPS.find(x=>x.id===r.id);
+      return `<b>${c.name[currentLang]}</b> (${r.score}%)`;
+    }).join(', ');
+    return `<div class="history-item">
+      <div class="hi-date">${d.toLocaleDateString()}<br>${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>
+      <div class="hi-crops">${names}<div class="hi-loc">📍 ${s.inputs.location || '—'} · N${s.inputs.N} P${s.inputs.P} K${s.inputs.K} pH${s.inputs.pH}</div></div>
+    </div>`;
+  }).join('');
+}
+
+/* =========================================================================
+   AUTO LOGIN IF SESSION EXISTS
+   ========================================================================= */
+if(USE_FIREBASE){
+  fbAuth.onAuthStateChanged(async (user)=>{
+    if(user){
+      const doc = await fbDb.collection('users').doc(user.uid).get();
+      currentUser = doc.exists ? doc.data() : {name:user.email.split('@')[0], email:user.email};
+      currentUser.uid = user.uid;
+      enterApp();
+      refreshFirebaseScans();
+    }
+  });
+} else {
+  const existing = LocalDB.currentUser();
+  if(existing){ currentUser = existing; enterApp(); }
+}
+
+renderRegionChips();
+renderResults(null, null);
+applyI18n();
+</script>
+</body>
+</html>
